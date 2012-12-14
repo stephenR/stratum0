@@ -1,0 +1,98 @@
+# This is a sample Vroom input file. It should help you get started.
+#
+# Edit this file with your content. Then run `vroom --vroom` to start
+# the show!
+#
+# See `perldoc Vroom` for complete details.
+#
+---- config
+# Basic config options.
+title: Vroom!
+indent: 5
+height: 40
+width: 140
+auto_size: 1
+skip: 0
+
+# The following options are for Gvim usage.
+# vim: gvim
+# gvimrc: |
+#   set fuopt=maxhorz,maxvert
+#   set guioptions=egmLtT
+#   set guifont=Bitstream_Vera_Sans_Mono:h18
+#   set guicursor=a:blinkon0-ver25-Cursor
+#   colorscheme default
+
+---- center
+RWTH CTF 2012
+
+RFS Challenge
+
+----
+== Protocol
+
+* ["NEW"|KEY|IV|MSG_LEN|MSG|HMAC]
+* ["OLD"|ID |IV|MSG_LEN|MSG|HMAC]
++ => "NEW": the key is stored and an ID is created
++ => "OLD": the key for ID is used
+
+----
+== Messages
+
+* MSG is either PLANT_EVIDENCE or EXTRACT_EVIDENCE
+* The flag server uses this to plant flags
+
+----
+== Crypto
+
+* First, the HMAC is checked
+=> If it is wrong, a fuck you message is encrypted and sent to the client
+* Cipher is AES in counter mode
+
+----
+== First Step
+
+* We NEED the ID of the flag server
+* IDs and encrypted messages are logged
+* Fortunately, the log server is publicly accessible
+
+----
+== What now?
+
+* We can get the ID
+* We can get the encrypted flag
+* We can get an encrypted fuck you message (known plaintext)
+
++*How did counter mode work again?
+
+----
+== counter mode
+
+* The IV is used as a counter, e.G. incremented for each new block
+* cipher_block = cleartext_block XOR AES(counter, key)
+
+----
+== attack
+
+So we have:
+* encrypted_fuck_you = fuck_you XOR AES(counter, key)
+=> AES(counter, key) = encrypted_fuck_you XOR fuck_you
+* encrypted_flag = flag XOR AES(counter, key)
+=> flag = encrypted_flag XOR AES(counter, key)
+
++Yes, it's that easy.
+---- python
+== code snippet
+def get_data(iv, key_id, ip, port):
+  msg_len = hex_to_bin("0020")
+  msg = "OLD"+key_id+iv+msg_len+"0"*32
+  s.send(msg)
+  data = s.recv(BUFFER_SIZE)
+  return xor_strings(data[2:18], fy_msg)
+
+def main():
+  for i in range(rounds):
+    cipher_bin = cipher_bin + get_data(iv, key_id, ip, port)
+    iv = increment_iv(iv)
+
+  print xor_strings(cipher_bin, enc_flag)
